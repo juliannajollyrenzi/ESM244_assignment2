@@ -11,3 +11,7 @@ require(tidyverse)
 require(here)
 ```
 
+```{r}
+palmetto <- read_csv(here("data", "palmetto.csv"))
+```
+
