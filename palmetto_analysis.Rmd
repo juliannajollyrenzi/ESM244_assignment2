@@ -1,0 +1,13 @@
+---
+title: "Palmetto_analysis"
+author: "Julianna Renzi"
+date: "1/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(tidyverse)
+require(here)
+```
+
