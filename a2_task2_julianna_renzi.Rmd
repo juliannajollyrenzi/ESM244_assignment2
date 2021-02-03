@@ -1,17 +1,78 @@
 ---
-title: "Palmetto_analysis"
+title: "Palmetto species: binary logistic regression"
 author: "Julianna Renzi"
 date: "1/29/2021"
-output: html_document
+output: 
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+    code_folding: hide
+editor_options: 
+  chunk_output_type: console
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, warning=FALSE, message = FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 require(tidyverse)
 require(here)
+require(GGally) # for ggpairs
 ```
 
-```{r}
-palmetto <- read_csv(here("data", "palmetto.csv"))
+## Exploratory data visualization {.tabset}
+
+### Figure 1
+
+Use binary logistic regression to test feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species Serenoa repens or Sabal etonia.
+
+A section containing 2 - 3 finalized data visualizations (with figure captions) in which you explore differences in height, canopy length, canopy width, and green leaves for the two species. Add a figure caption to each. Below each data visualization, add a short (~1 sentence) statement with a takeaway from the visualization.
+
+```{r, warning=FALSE, message = FALSE, fig.cap="**Figure 1:** Relationship between plant height, canopy length, canopy width, and the number of green leaves for both Sabal etonia and Serenoa repens. Correlations are Pearson's correlation and stars indicate statistical significance (p < 0.05)  (Data from: Abrahamson, 2019)"}
+palmetto <- read_csv(here("data", "palmetto.csv")) %>%
+  select(year, species, height, length, width, green_lvs) %>% # just keep variables of interest
+  drop_na(species, height, length, width, green_lvs) %>%  # get rid of any NA values
+  mutate(species_name = ifelse(species == 1, "Serenoa repens", 
+                ifelse(species == 2, "Sabal etonia", NA)))
+
+ggpairs(data = palmetto,
+        columns = c(4:ncol(palmetto)-1),
+        ggplot2::aes(colour=species_name),
+        title = "Palmetto species",
+        legend = 1,
+        columnLabels = c("Height", "Canopy length", "Canopy width", "Green Leaves"),
+        upper = list(continuous = wrap("cor", size = 2.5))) +
+  theme(legend.position = "bottom") +
+  scale_fill_manual(values = c("#E69F00", "#56B4E9"), name = "Species") +
+  scale_color_manual(values = c("#E69F00", "#56B4E9")) +
+  theme_classic()
+
+
 ```
+
+### Figure 2
+
+```{r, warning=FALSE, message=FALSE, "**Figure 2:** Description  (Abrahamson, 2019)"}
+
+```
+
+### Figure 3
+
+```{r, warning=FALSE, message=FALSE, "**Figure 3:** Descrition  (Abrahamson, 2019)"}
+
+```
+
+## Binary Logistic Regression
+
+A section in which you perform binary logistic regression using plant height, canopy length, canopy width and green leaves as predictor variables to understand how they relate to probability of a plant being Serenoa repens or Sabal etonia (make sure you understand which species is the first ‘0’ factor level, and which is ‘1’ - you may want to convert to a factor first, then use the levels() function to check). The output should be a finalized table containing the binary logistic regression model results (at least coefficients, standard errors for the coefficients, and information for significance - consider using broom::tidy() to get you most of the way). 
+
+## Classification accuracy
+
+A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is >=50% that it is species A, then it would be classified as species A). You should use broom::augment() to find the probabilities for each plant in the original dataset, then add a column for which species the model (using that 50% cutoff) would classify that plant as using the 4 included predictor variables. The outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table. 
+
+## Data source
+
+**Citation:** 
+Abrahamson, W.G. 2019. Survival, growth and biomass estimates of two dominant palmetto species of south-central Florida from 1981 - 2017, ongoing at 5-year intervals ver 1. Environmental Data Initiative. https://doi.org/10.6073/pasta/f2f96ec76fbbd4b9db431c79a770c4d5
+
+
 
