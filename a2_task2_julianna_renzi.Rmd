@@ -17,22 +17,25 @@ knitr::opts_chunk$set(echo = TRUE)
 require(tidyverse)
 require(here)
 require(GGally) # for ggpairs
+library(broom) # to get tidy model outputs in dataframes
+library(ggfortify) # For PCA biplot
+library(knitr) # kables
+library(caret) # confusion matrix
 ```
 
 ## Exploratory data visualization {.tabset}
 
 ### Figure 1
 
-Use binary logistic regression to test feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species Serenoa repens or Sabal etonia.
-
-A section containing 2 - 3 finalized data visualizations (with figure captions) in which you explore differences in height, canopy length, canopy width, and green leaves for the two species. Add a figure caption to each. Below each data visualization, add a short (~1 sentence) statement with a takeaway from the visualization.
-
 ```{r, warning=FALSE, message = FALSE, fig.cap="**Figure 1:** Relationship between plant height, canopy length, canopy width, and the number of green leaves for both Sabal etonia and Serenoa repens. Correlations are Pearson's correlation and stars indicate statistical significance (p < 0.05)  (Data from: Abrahamson, 2019)"}
 palmetto <- read_csv(here("data", "palmetto.csv")) %>%
   select(year, species, height, length, width, green_lvs) %>% # just keep variables of interest
   drop_na(species, height, length, width, green_lvs) %>%  # get rid of any NA values
   mutate(species_name = ifelse(species == 1, "Serenoa repens", 
-                ifelse(species == 2, "Sabal etonia", NA)))
+                ifelse(species == 2, "Sabal etonia", NA))) %>% 
+  mutate(species = as.factor(species)) %>% # want to make it clear that there are 2 factor levels
+  mutate(species_name = as.factor(species_name)) %>% 
+  mutate(species_name = relevel(species_name, ref = "Sabal etonia")) # be explicit--predicting the likelihood of being Serenoa repens
 
 ggpairs(data = palmetto,
         columns = c(4:ncol(palmetto)-1),
@@ -41,33 +44,96 @@ ggpairs(data = palmetto,
         legend = 1,
         columnLabels = c("Height", "Canopy length", "Canopy width", "Green Leaves"),
         upper = list(continuous = wrap("cor", size = 2.5))) +
-  theme(legend.position = "bottom") +
   scale_fill_manual(values = c("#E69F00", "#56B4E9"), name = "Species") +
   scale_color_manual(values = c("#E69F00", "#56B4E9")) +
-  theme_classic()
+  theme_classic() +
+  theme(legend.position = "bottom")
 
 
 ```
+
+- *Sabal etonia* and *Serenoa repens* overlap considerably in terms of height (although *S. etonia* is slightly taller), canopy length, and canopy width. However, they appear to have different numbers of green leaves (bottom row), which may be useful for distinguishing between them.  
 
 ### Figure 2
 
-```{r, warning=FALSE, message=FALSE, "**Figure 2:** Description  (Abrahamson, 2019)"}
+```{r, warning=FALSE, message=FALSE, fig.cap="**Figure 2:** PCA biplot of the two palmetto species based on their height, canopy length, canopy width, and number of green leaves. Each point represents a single observation and the two axes together explain 88.84% of the variation in the data (Data from: Abrahamson, 2019)"}
+palmetto_pca <- palmetto %>% 
+  select(height, length, width, green_lvs) %>%
+  scale() %>%
+  prcomp()
+
+autoplot(palmetto_pca,
+         data = palmetto,
+         loadings = TRUE,
+         colour = 'species_name',
+         loadings.label = TRUE,
+         loadings.colour = "black",
+         loadings.label.colour = "black",
+         loadings.label.vjust = -0.5,
+         alpha = 0.5
+         ) +
+  scale_color_manual(name = "Species", values = c("#E69F00", "#56B4E9")) +
+  theme_light() +
+  theme(legend.position = "top")
+  
 
 ```
 
-### Figure 3
+- Similar to what we saw in the figure above, this biplot suggests that height, width, and length are all strongly positively correlated, but that number of green leaves stand out as a difference between the two species. It also looks like based on these 4 characteristics it may be possible to distinguish the two species, although there is considerable overlap. 
 
-```{r, warning=FALSE, message=FALSE, "**Figure 3:** Descrition  (Abrahamson, 2019)"}
-
-```
 
 ## Binary Logistic Regression
 
-A section in which you perform binary logistic regression using plant height, canopy length, canopy width and green leaves as predictor variables to understand how they relate to probability of a plant being Serenoa repens or Sabal etonia (make sure you understand which species is the first ‘0’ factor level, and which is ‘1’ - you may want to convert to a factor first, then use the levels() function to check). The output should be a finalized table containing the binary logistic regression model results (at least coefficients, standard errors for the coefficients, and information for significance - consider using broom::tidy() to get you most of the way). 
+
+```{r}
+# logistic regression 
+palmetto_blr <- glm(species_name ~ height + length + width + green_lvs,
+                            data = palmetto,
+                            family = "binomial")
+
+# Note that levels(palmetto$species_name) yields "Sabal etonia" then "Serenoa repens"
+
+kable(broom::tidy(palmetto_blr), 
+      digits = 3,
+      caption = "Table 1: Model summary from a binary logistic regression of palmetto species as predicted by height, canopy length, canopy width, and number of green leaves")
+
+
+```
+
 
 ## Classification accuracy
 
-A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is >=50% that it is species A, then it would be classified as species A). You should use broom::augment() to find the probabilities for each plant in the original dataset, then add a column for which species the model (using that 50% cutoff) would classify that plant as using the 4 included predictor variables. The outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table. 
+```{r}
+# see what results our model would predict
+# augment takes original data and then adds on column of probability based on model of an observation being chinstrap
+blr_fitted <- palmetto_blr %>% 
+  broom::augment(type.predict = "response") %>% # need to specify probabilities [response], not log odds
+# fitted value is probability that the observation is S. repens
+  mutate(Pred_species = ifelse(.fitted >= 0.50, "Serenoa repens", "Sabal etonia")) %>% # set threshold (recall we're predicting the probability of it being S. repens)
+  mutate(Pred_species = as.factor(Pred_species))
+
+
+# calculate confusion matrix
+cm <- confusionMatrix(data = blr_fitted$Pred_species, 
+                reference = blr_fitted$species_name)$table
+
+# percent correct for S. etonia
+perc_corr_SE <- cm["Sabal etonia", "Sabal etonia"] / (cm["Sabal etonia", "Sabal etonia"] + cm["Serenoa repens", "Sabal etonia"]) * 100
+
+# percent correct for S. repens
+perc_corr_SR <- cm["Serenoa repens", "Serenoa repens"] / (cm["Serenoa repens", "Serenoa repens"] + cm["Sabal etonia", "Serenoa repens"]) * 100
+
+# combine into one table
+cm_table <- cbind(t(cm), "Percent classified correctly" = c(perc_corr_SE, perc_corr_SR)) # need to transpose so correct values are in the rows
+
+# make nice and add a caption
+kable(cm_table,
+      caption = "Table 2: Matrix showing model predicted classficiations (columns) vs. true classficiations (rows) as well as a column with the percent classsified correctly given a 50% cutoff")
+
+
+
+```
+
 
 ## Data source
 
