@@ -1,0 +1,81 @@
+---
+title: 'Tidy Tuesday: Plastics'
+author: "Julianna Renzi"
+date: "1/29/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tidytuesdayR)
+library(janitor)
+
+library(sf) # a type of data format -- simple table?
+library(maptools)
+library(scico) # scientific color map palettes
+library(patchwork) # putting plots together
+library(cowplot) # helps streamline ggplot themes and annotations for publication-level products
+```
+
+Wrangle then visualize the data, however you want - but you should try at least two new things (for data wrangling or visualization), like new functions, data viz tools, color palettes, fonts, making your own ggplot theme, etc. The visualization does NOT need to be finalized -- in the spirit of TidyTuesday, the entire goal of this activity is to try something new, then share it with us. That means it can be a beautiful graph, an artsy design built from the data, an opportunity for you to try a smörgåsbord of random things that seem interesting. So after you make it, SUBMIT YOUR TASK 3 by posting your visualization in the #code-wins channel on our course Slack channel, along with two new things that you learned (a function, a way to update a visualization, a challenge that you were able to troubleshoot, etc.). Need inspiration? Check out the #tidytuesday hashtag on Twitter, where other people in the R community have posted links to their code for this week so that other people can learn from it! 
+
+```{r}
+# read in the data:
+tuesdata <- tidytuesdayR::tt_load(2021, week = 5)
+
+plastics <- tuesdata$plastics 
+
+# they say: Note that the plastic types are not in tidy format, and you'll likely want to pivot_longer()
+
+```
+
+I'm going to follow along from something someone else did with the data (here: https://github.com/Z3tt/TidyTuesday/blob/master/R/2019_21_PlasticWaste.Rmd), which I found on Twitter (https://twitter.com/CedScherer/status/1131591383981154304) because I want to get better at making maps
+
+```{r}
+# summarize the data by country
+plast_country <- plastics %>% 
+  group_by(country) %>% 
+  summarize(total_plastics = sum(grand_total),
+            number_events = sum(num_events),
+            mean_plastic = total_plastics/number_events
+  ) %>% 
+  mutate(NAME = country)
+  
+```
+
+
+```{r}
+# bring in simplified world country polygons
+data("wrld_simpl") 
+
+df_plastic_map <- wrld_simpl %>% 
+  st_as_sf() %>% # At its most basic, an sf object is a collection of simple features that includes attributes and geometries in the form of a data frame. In other words, it is a data frame (or tibble) with rows of features, columns of attributes, and a special geometry column that contains the spatial aspects of the features
+  st_transform(crs = "+proj=robin") %>% 
+  inner_join(plast_country, by = "NAME") # only want where the countries are in both df's (if this was real I'd clean the weird names up)
+
+# plot it
+total_p <- df_plastic_map %>% 
+  ggplot() + 
+  geom_sf(aes(geometry = geometry, fill = total_plastics)) +
+  scale_fill_scico(palette = "lajolla", na.value = "grey30") +
+  theme_classic()
+
+number_p <- df_plastic_map %>% 
+  ggplot() + 
+  geom_sf(aes(geometry = geometry, fill = number_events)) +
+  scale_fill_scico(palette = "lapaz", na.value = "grey30") +
+  theme_classic()
+
+mean_p <- df_plastic_map %>% 
+  ggplot() + 
+  geom_sf(aes(geometry = geometry, fill = mean_plastic)) +
+  scale_fill_scico(palette = "bilbao", na.value = "grey30") +
+  theme_classic()
+
+total_p / number_p 
+
+```
+
